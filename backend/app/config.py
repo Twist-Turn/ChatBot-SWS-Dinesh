@@ -30,5 +30,11 @@ class Settings(BaseSettings):
     rate_limit_upload: str = "5/minute"
     max_upload_mb: int = 5
 
+    # Supabase chat history (leave blank to disable persistence)
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    supabase_history_table: str = "chat_messages"
+    chat_history_limit: int = 200
+
 
 settings = Settings()

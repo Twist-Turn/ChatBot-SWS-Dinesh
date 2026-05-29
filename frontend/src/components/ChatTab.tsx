@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { postChat } from '../api'
+import { clearChatHistory, getChatHistory, postChat } from '../api'
 import ChatInput from './ChatInput'
 import ChatMessage, { Message } from './ChatMessage'
 import SourceBadges from './SourceBadges'
@@ -15,8 +15,28 @@ const GREETING: Message = {
 export default function ChatTab() {
   const [messages, setMessages] = useState<Message[]>([GREETING])
   const [pending, setPending] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getChatHistory()
+      .then((rows) => {
+        if (cancelled) return
+        setMessages(rows.length > 0 ? [GREETING, ...rows] : [GREETING])
+      })
+      .catch(() => {
+        // History unavailable (Supabase not configured, network error, etc.) —
+        // start with just the greeting; the chat itself still works.
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -41,7 +61,19 @@ export default function ChatTab() {
     }
   }
 
-  const showSuggestions = messages.length === 1 && !pending
+  const showSuggestions = messages.length === 1 && !pending && !loadingHistory
+  const canClear = messages.length > 1 && !pending
+
+  const clear = async () => {
+    if (!canClear) return
+    setError(null)
+    setMessages([GREETING])
+    try {
+      await clearChatHistory()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   return (
     <section className="chat-tab">
@@ -49,7 +81,18 @@ export default function ChatTab() {
         <span className="info-bot" aria-hidden>
           🤖
         </span>
-        Powered by OpenAI + SWS AI company documents. Ask anything about company policies.
+        <span className="info-text">
+          Powered by OpenAI + SWS AI company documents. Ask anything about company policies.
+        </span>
+        <button
+          type="button"
+          className="clear-chat-button"
+          onClick={clear}
+          disabled={!canClear}
+          title="Clear saved chat history"
+        >
+          Clear chat
+        </button>
       </div>
 
       <div className="messages">

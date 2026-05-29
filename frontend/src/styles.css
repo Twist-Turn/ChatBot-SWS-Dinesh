@@ -162,6 +162,28 @@ body,
 .info-bot {
   font-size: 16px;
 }
+.info-text {
+  flex: 1;
+}
+.clear-chat-button {
+  background: none;
+  border: 1px solid currentColor;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.clear-chat-button:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.04);
+}
+.clear-chat-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 .messages {
   display: flex;

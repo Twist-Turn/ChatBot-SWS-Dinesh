@@ -133,6 +133,24 @@ npm run dev
 
 Open **http://localhost:5173** in your browser. The Vite dev server proxies `/api/*` to the backend automatically.
 
+### Chat history (optional, via Supabase)
+
+Chat history persists per-browser via an anonymous session UUID stored in `localStorage` and sent as the `X-Session-Id` header. The backend writes/reads messages from a Supabase table using the service-role key. **If `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` are unset, the app runs fine with no persistence** — the conversation just resets on reload.
+
+To enable it:
+
+1. Create a Supabase project (free tier is enough).
+2. In **SQL Editor**, run [`backend/supabase_schema.sql`](backend/supabase_schema.sql).
+3. In **Project Settings → API**, copy the **Project URL** and the **`service_role`** key.
+4. Add both to `backend/.env`:
+   ```
+   SUPABASE_URL=https://<project>.supabase.co
+   SUPABASE_SERVICE_KEY=eyJ...
+   ```
+5. Restart `uvicorn`. `GET /health` should now report `"history_enabled": true`.
+
+The service-role key bypasses RLS and must stay server-side — never expose it in the frontend bundle.
+
 ---
 
 ## Using the app
@@ -149,10 +167,12 @@ Drop one or more PDFs onto the upload zone, or click to pick files. Each file is
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| `GET`  | `/health`         | —                         | `{ "status": "ok" }` |
-| `POST` | `/api/chat`       | `{ "question": "..." }`    | `{ "answer": "...", "sources": ["HR Policy", ...] }` |
-| `POST` | `/api/upload`     | `multipart/form-data` (`file`) | `{ "filename": "...", "source_name": "...", "chunks_added": 12 }` |
-| `GET`  | `/api/documents`  | —                         | `{ "documents": [{ "source_file", "source_name", "chunks" }, ...] }` |
+| `GET`    | `/health`              | —                         | `{ "status": "ok", "auth_enabled": bool, "history_enabled": bool }` |
+| `POST`   | `/api/chat`            | `{ "question": "..." }`    | `{ "answer": "...", "sources": ["HR Policy", ...] }` |
+| `POST`   | `/api/upload`          | `multipart/form-data` (`file`) | `{ "filename": "...", "source_name": "...", "chunks_added": 12 }` |
+| `GET`    | `/api/documents`       | —                         | `{ "documents": [{ "source_file", "source_name", "chunks" }, ...] }` |
+| `GET`    | `/api/chat/history`    | — (`X-Session-Id` header) | `{ "messages": [{ "role", "text", "sources" }, ...] }` |
+| `DELETE` | `/api/chat/history`    | — (`X-Session-Id` header) | `204 No Content` |
 
 Validation: `/api/chat` requires non-empty `question` (422 otherwise). `/api/upload` rejects requests without/with a wrong `X-Admin-Key` (401), non-`.pdf` (400), files missing the `%PDF-` magic bytes (400), files over `MAX_UPLOAD_MB` (413), empty files (400), and image-only PDFs with no extractable text (422).
 
@@ -199,4 +219,3 @@ Validation: `/api/chat` requires non-empty `question` (422 otherwise). `/api/upl
 - Streaming responses via Server-Sent Events for nicer perceived latency.
 - Show per-chunk page numbers in the source badges (data is already in the metadata).
 - A small admin endpoint to delete an indexed document.
-- Persist the user-facing conversation history to localStorage or a backend store.

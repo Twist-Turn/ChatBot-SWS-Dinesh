@@ -13,6 +13,7 @@ from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.indexer import index_pdf, list_indexed_documents
+from app import history
 from app.rag import answer
 from app.sources import friendly_name
 
@@ -33,9 +34,21 @@ app.add_middleware(
         "http://127.0.0.1:5173",
     ],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+def get_session_id(x_session_id: str | None = Header(default=None)) -> str | None:
+    """Extract and validate the anonymous browser session id.
+
+    Returns None if the header is missing or malformed — callers should treat
+    that as "no persistence for this request" rather than an error so the chat
+    keeps working when Supabase is unconfigured.
+    """
+    if x_session_id and history.is_valid_session_id(x_session_id):
+        return x_session_id
+    return None
 
 
 def require_admin_key(x_admin_key: str | None = Header(default=None)) -> None:
@@ -79,18 +92,55 @@ class DocumentsResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     auth_enabled: bool
+    history_enabled: bool
+
+
+class HistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str
+    sources: list[str] = []
+
+
+class HistoryResponse(BaseModel):
+    messages: list[HistoryMessage]
 
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    return HealthResponse(status="ok", auth_enabled=bool(settings.admin_api_key))
+    return HealthResponse(
+        status="ok",
+        auth_enabled=bool(settings.admin_api_key),
+        history_enabled=history.is_enabled(),
+    )
 
 
 @app.post("/api/chat", response_model=ChatResponse)
 @limiter.limit(settings.rate_limit_chat)
-def chat(request: Request, req: ChatRequest) -> ChatResponse:
+def chat(
+    request: Request,
+    req: ChatRequest,
+    session_id: str | None = Depends(get_session_id),
+) -> ChatResponse:
     result = answer(req.question)
+    if session_id:
+        history.append_message(session_id, "user", req.question, [])
+        history.append_message(session_id, "assistant", result["answer"], result["sources"])
     return ChatResponse(**result)
+
+
+@app.get("/api/chat/history", response_model=HistoryResponse)
+def chat_history(session_id: str | None = Depends(get_session_id)) -> HistoryResponse:
+    if not session_id:
+        return HistoryResponse(messages=[])
+    rows = history.load_history(session_id)
+    return HistoryResponse(messages=[HistoryMessage(**r) for r in rows])
+
+
+@app.delete("/api/chat/history", status_code=204)
+def chat_history_clear(session_id: str | None = Depends(get_session_id)) -> None:
+    if session_id:
+        history.clear_history(session_id)
+    return None
 
 
 @app.post("/api/upload", response_model=UploadResponse, dependencies=[Depends(require_admin_key)])
