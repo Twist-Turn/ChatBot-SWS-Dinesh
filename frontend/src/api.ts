@@ -38,10 +38,24 @@ export async function postChat(question: string): Promise<ChatResponse> {
   return handle<ChatResponse>(res)
 }
 
+const ADMIN_KEY_STORAGE = 'sws.adminKey'
+
+export function getAdminKey(): string {
+  return localStorage.getItem(ADMIN_KEY_STORAGE) ?? ''
+}
+
+export function setAdminKey(key: string): void {
+  if (key) localStorage.setItem(ADMIN_KEY_STORAGE, key)
+  else localStorage.removeItem(ADMIN_KEY_STORAGE)
+}
+
 export async function uploadPdf(file: File): Promise<UploadResponse> {
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch('/api/upload', { method: 'POST', body: form })
+  const headers: Record<string, string> = {}
+  const adminKey = getAdminKey()
+  if (adminKey) headers['X-Admin-Key'] = adminKey
+  const res = await fetch('/api/upload', { method: 'POST', body: form, headers })
   return handle<UploadResponse>(res)
 }
 

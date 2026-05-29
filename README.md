@@ -154,7 +154,19 @@ Drop one or more PDFs onto the upload zone, or click to pick files. Each file is
 | `POST` | `/api/upload`     | `multipart/form-data` (`file`) | `{ "filename": "...", "source_name": "...", "chunks_added": 12 }` |
 | `GET`  | `/api/documents`  | —                         | `{ "documents": [{ "source_file", "source_name", "chunks" }, ...] }` |
 
-Validation: `/api/chat` requires non-empty `question` (422 otherwise). `/api/upload` rejects non-`.pdf` (400), empty files (400), and image-only PDFs with no extractable text (422).
+Validation: `/api/chat` requires non-empty `question` (422 otherwise). `/api/upload` rejects requests without/with a wrong `X-Admin-Key` (401), non-`.pdf` (400), files missing the `%PDF-` magic bytes (400), files over `MAX_UPLOAD_MB` (413), empty files (400), and image-only PDFs with no extractable text (422).
+
+---
+
+## Security
+
+| Layer | Mechanism |
+|---|---|
+| Upload authorization | `POST /api/upload` requires an `X-Admin-Key` header matching the backend's `ADMIN_API_KEY` env var. When `ADMIN_API_KEY` is empty, the endpoint is open (development mode). The Document Upload tab has a "🔒 Admin key" field that persists the key to `localStorage` and adds it to every upload request. |
+| Rate limiting | [`slowapi`](https://pypi.org/project/slowapi/) enforces per-IP limits. Defaults: `RATE_LIMIT_CHAT=20/minute`, `RATE_LIMIT_UPLOAD=5/minute`. Excess requests get HTTP 429. Protects OpenAI budget from accidental loops or abuse. |
+| Upload hardening | (a) extension must be `.pdf`, (b) `Content-Length`-equivalent body size must be ≤ `MAX_UPLOAD_MB` (default 5 MB) → 413, (c) the body must start with the `%PDF-` magic bytes → 400 if not. Stops trivially-malicious uploads even when the admin key is leaked. |
+| Secrets | All credentials live in `backend/.env`, which is `.gitignored`. No secret is shipped to the frontend bundle; the admin key is entered by the user at runtime and lives only in their browser's `localStorage`. |
+| CORS | Restricted to `http://localhost:5173` / `127.0.0.1:5173` (the Vite dev origin). |
 
 ---
 

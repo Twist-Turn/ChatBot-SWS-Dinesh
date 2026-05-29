@@ -25,5 +25,10 @@ class Settings(BaseSettings):
     chroma_dir: Path = BACKEND_DIR / "chroma_db"
     chroma_collection: str = "sws_ai_docs"
 
+    admin_api_key: str = ""
+    rate_limit_chat: str = "20/minute"
+    rate_limit_upload: str = "5/minute"
+    max_upload_mb: int = 5
+
 
 settings = Settings()

@@ -1,5 +1,11 @@
 import { DragEvent, useEffect, useRef, useState } from 'react'
-import { getDocuments, uploadPdf, type DocumentEntry } from '../api'
+import {
+  getAdminKey,
+  getDocuments,
+  setAdminKey,
+  uploadPdf,
+  type DocumentEntry,
+} from '../api'
 
 type FileStatus =
   | { state: 'pending' }
@@ -20,7 +26,14 @@ export default function UploadTab() {
   const [documents, setDocuments] = useState<DocumentEntry[]>([])
   const [dragging, setDragging] = useState(false)
   const [loadingDocs, setLoadingDocs] = useState(false)
+  const [adminKey, setAdminKeyLocal] = useState<string>(getAdminKey())
+  const [adminKeySaved, setAdminKeySaved] = useState<boolean>(!!getAdminKey())
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const persistAdminKey = () => {
+    setAdminKey(adminKey.trim())
+    setAdminKeySaved(!!adminKey.trim())
+  }
 
   const refreshDocs = async () => {
     setLoadingDocs(true)
@@ -83,6 +96,26 @@ export default function UploadTab() {
 
   return (
     <section className="upload-tab">
+      <div className="admin-key-row">
+        <label htmlFor="admin-key" className="admin-key-label">
+          🔒 Admin key
+        </label>
+        <input
+          id="admin-key"
+          type="password"
+          placeholder="Required for uploads (set ADMIN_API_KEY in backend/.env)"
+          value={adminKey}
+          onChange={(e) => {
+            setAdminKeyLocal(e.target.value)
+            setAdminKeySaved(false)
+          }}
+          autoComplete="off"
+        />
+        <button type="button" onClick={persistAdminKey} disabled={!adminKey.trim()}>
+          {adminKeySaved ? '✓ Saved' : 'Save'}
+        </button>
+      </div>
+
       <div
         className={`drop-zone ${dragging ? 'drop-zone-active' : ''}`}
         onDragOver={(e) => {
