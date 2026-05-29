@@ -6,6 +6,7 @@ import {
   uploadPdf,
   type DocumentEntry,
 } from '../api'
+import { notify, requestBrowserPermission } from '../notifications'
 
 type FileStatus =
   | { state: 'pending' }
@@ -64,11 +65,15 @@ export default function UploadTab() {
           chunks: res.chunks_added,
           sourceName: res.source_name,
         })
+        notify(
+          'success',
+          `${res.source_name} indexed`,
+          `${res.chunks_added} chunks added from ${item.file.name}.`,
+        )
       } catch (e) {
-        updateItem(item.id, {
-          state: 'error',
-          message: e instanceof Error ? e.message : String(e),
-        })
+        const message = e instanceof Error ? e.message : String(e)
+        updateItem(item.id, { state: 'error', message })
+        notify('error', `Failed to index ${item.file.name}`, message)
       }
     }
     await refreshDocs()
@@ -79,6 +84,7 @@ export default function UploadTab() {
       (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'),
     )
     if (pdfs.length === 0) return
+    requestBrowserPermission()
     const queued: FileItem[] = pdfs.map((file) => ({
       id: nextId++,
       file,
